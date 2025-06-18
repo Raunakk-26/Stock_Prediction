@@ -1,48 +1,15 @@
 from flask import Flask, request, jsonify
-import numpy as np
-import pandas as pd
-import yfinance as yf
-from sklearn.linear_model import LinearRegression
+from flask_cors import CORS
+import requests
 from datetime import datetime, timedelta
-
-try:
-    from flask_cors import CORS
-except ImportError:
-    import os
-    os.system('pip install flask-cors')
-    from flask_cors import CORS
+import numpy as np
+from sklearn.linear_model import LinearRegression
+import pandas as pd
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend communication
+CORS(app)
 
-# Define a function to get predictions
-def predict_stock_prices(symbol, start_date, end_date):
-    # Download stock data from Yahoo Finance for the given date range
-    stock_data = yf.download(symbol, start=start_date, end=end_date)
-    
-    if stock_data.empty:
-        raise ValueError("Invalid stock symbol or no data available for the given date range")
-    
-    # Feature engineering: calculate the number of days since the first date
-    stock_data['Days'] = (stock_data.index - stock_data.index[0]).days
-    X = stock_data[['Days']]
-    y = stock_data['Close']
-    
-    # Train the model
-    model = LinearRegression()
-    model.fit(X, y)
-    
-    # Generate predictions for the next 10 days from the last date in the data
-    future_days = np.arange(stock_data['Days'].max() + 1, stock_data['Days'].max() + 11).reshape(-1, 1)
-    predicted_prices = model.predict(future_days)
-    
-    # Create future dates for the next 10 days
-    future_dates = pd.date_range(stock_data.index[-1] + pd.Timedelta(days=1), periods=10).strftime('%d-%B-%Y').tolist()
-    return future_dates, predicted_prices.tolist()
-
-@app.route('/')
-def home():
-    return "Stock Price Prediction API is running!"
+API_KEY = 'IO3ZT4YBQMDVIACI'  # Replace this with your Alpha Vantage API key
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -50,17 +17,39 @@ def predict():
     symbol = data.get('symbol')
     start_date = data.get('start_date')
     end_date = data.get('end_date')
-    
+
     if not symbol or not start_date or not end_date:
-        return jsonify({'error': 'Missing required parameters'}), 400
-    
-    # Convert the start and end date to datetime objects
-    start_date = datetime.strptime(start_date, '%Y-%m-%d')
-    end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        return jsonify({'error': 'Missing input parameters'}), 400
 
     try:
-        dates, predicted_prices = predict_stock_prices(symbol, start_date, end_date)
-        return jsonify({'dates': dates, 'predicted_prices': predicted_prices})
+        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={API_KEY}&outputsize=full'
+        response = requests.get(url)
+        json_data = response.json()
+
+        if 'Time Series (Daily)' not in json_data:
+            return jsonify({'error': 'Invalid stock symbol or API limit reached'}), 400
+
+        time_series = json_data['Time Series (Daily)']
+        df = pd.DataFrame.from_dict(time_series, orient='index')
+        df = df.rename(columns={'4. close': 'Close'})
+        df['Close'] = df['Close'].astype(float)
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        df = df.loc[start_date:end_date]
+
+        if df.empty:
+            return jsonify({'error': 'No data available for selected date range'}), 400
+
+        df['Days'] = (df.index - df.index[0]).days
+        model = LinearRegression()
+        model.fit(df[['Days']], df['Close'])
+
+        future_days = np.arange(df['Days'].max() + 1, df['Days'].max() + 11).reshape(-1, 1)
+        predicted_prices = model.predict(future_days)
+        future_dates = pd.date_range(df.index[-1] + timedelta(days=1), periods=10).strftime('%d-%B-%Y').tolist()
+
+        return jsonify({'dates': future_dates, 'predicted_prices': predicted_prices.tolist()})
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
