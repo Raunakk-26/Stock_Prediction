@@ -90,36 +90,37 @@
         <p>&copy; Raunak's Stock Predictor. All rights reserved.</p>
     </footer>
     <script>
-        document.getElementById('stock-form').addEventListener('submit', async function(event) {
-            event.preventDefault();        
-            const symbol = document.getElementById('stock-symbol').value;
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;        
-            const resultDiv = document.getElementById('prediction-result');
-            const loadingDiv = document.getElementById('loading');
-            loadingDiv.style.display = "block";
-            resultDiv.innerHTML = "";        
-            try {
-                const response = await fetch('http://127.0.0.1:5000/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol, start_date: startDate, end_date: endDate })
-                });
-                const data = await response.json();        
-                loadingDiv.style.display = "none";        
-                if (data.error) {
-                    resultDiv.innerHTML = `<p>${data.error}</p>`;
-                } else {
-                    const predictions = data.dates.map((date, i) => {
-                        return `<p>${date}: $${data.predicted_prices[i][0].toFixed(2)}</p>`;
-                    }).join('');
-                    resultDiv.innerHTML = `<h3>Predicted Prices:</h3>${predictions}`;
-                }
-            } catch (error) {
-                resultDiv.innerHTML = `<p>Error fetching predictions. Please try again later.</p>`;
-                loadingDiv.style.display = "none";
+    document.getElementById('stock-form').addEventListener('submit', async function(event) {
+        event.preventDefault();        
+        const symbol = document.getElementById('stock-symbol').value;
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;        
+        const resultDiv = document.getElementById('prediction-result');
+        const loadingDiv = document.getElementById('loading');
+        loadingDiv.style.display = "block";
+        resultDiv.innerHTML = "";        
+        try {
+            const response = await fetch('http://127.0.0.1:5000/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ symbol, start_date: startDate, end_date: endDate })
+            });
+            const data = await response.json();        
+            loadingDiv.style.display = "none";        
+            if (data.error) {
+                resultDiv.innerHTML = `<p>${data.error}</p>`;
+            } else {
+                const predictions = data.dates.map((date, i) => {
+                    return `<p>${date}: $${data.predicted_prices[i].toFixed(2)}</p>`;
+                }).join('');
+                resultDiv.innerHTML = `<h3>Predicted Prices:</h3>${predictions}`;
             }
-        });
-    </script>
+        } catch (error) {
+            resultDiv.innerHTML = `<p>Error fetching predictions. Please try again later.</p>`;
+            loadingDiv.style.display = "none";
+        }
+    });
+</script>
+
 </body>
 </html>
